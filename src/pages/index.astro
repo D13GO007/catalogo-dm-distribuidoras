@@ -1,0 +1,433 @@
+---
+import '../styles.css';
+
+// 🔗 LINK DE DM DISTRIBUIDORA
+const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTbPeSuPs8-Fx95XsDiOXFu7iluT-4MIlAe5uA6Y2axVzzdfyR61Wt0Giu7ja7fNWuC7bSiSZ1TkuXl/pub?output=csv';
+
+interface Referencia {
+  modelo: string;
+  precio: number;
+  precioKoyo: number;
+  esDoble: boolean;
+  imagenEspecifica: string;
+}
+
+interface ProductoAgrupado {
+  id: string;
+  nombre: string;
+  imagenDefault: string;
+  referencias: Referencia[];
+}
+
+let productosAgrupados: ProductoAgrupado[] = [];
+let errorCarga = '';
+const IMAGEN_SIN_FOTO = 'https://placehold.co/500x500/f0f0f0/d60000?text=SIN+FOTO';
+
+try {
+  const response = await fetch(SHEET_URL);
+  if (!response.ok) throw new Error('Error al conectar con Google Sheets');
+  const data = await response.text();
+  const filas = data.split('\n');
+  const grupos: Record<string, ProductoAgrupado> = {};
+
+  filas.slice(1).forEach((fila, index) => {
+    if (!fila.trim()) return;
+    const col = fila.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+    if (col.length < 3) return; 
+
+    const nombreFamilia = col[0]?.replace(/^"|"$/g, '').trim().toUpperCase(); 
+    let modeloReferencia = col[1]?.replace(/^"|"$/g, '').trim().toUpperCase();
+    if (!modeloReferencia) modeloReferencia = "UNIDAD";
+
+    const precioRaw = col[2]?.replace(/^"|"$/g, '').replace(/[^0-9/]/g, ''); 
+    
+    let precio1 = 0;
+    let precio2 = 0;
+    let tieneDosPrecios = false;
+
+    if (precioRaw.includes('/')) {
+        const partes = precioRaw.split('/');
+        precio1 = Number(partes[0]);
+        precio2 = Number(partes[1]);
+        tieneDosPrecios = true;
+    } else {
+        precio1 = Number(precioRaw);
+    }
+
+    let imagenRaw = col[3]?.replace(/^"|"$/g, '').trim() || '';
+    const id = `prod-${index}`;
+
+    if (!nombreFamilia || precio1 === 0) return;
+
+    if (imagenRaw.startsWith('/public')) {
+        imagenRaw = imagenRaw.replace('/public', '');
+    }
+    const imagenFinal = imagenRaw !== '' ? imagenRaw : IMAGEN_SIN_FOTO;
+
+    if (!grupos[nombreFamilia]) {
+      grupos[nombreFamilia] = {
+        id,
+        nombre: nombreFamilia,
+        imagenDefault: imagenFinal,
+        referencias: []
+      };
+    }
+    const imagenVariante = imagenRaw !== '' ? imagenRaw : grupos[nombreFamilia].imagenDefault;
+
+    grupos[nombreFamilia].referencias.push({
+      modelo: modeloReferencia,
+      precio: precio1,
+      precioKoyo: precio2,
+      esDoble: tieneDosPrecios,
+      imagenEspecifica: imagenVariante
+    });
+  });
+  
+  productosAgrupados = Object.values(grupos).sort((a, b) => 
+    a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' })
+  );
+
+} catch (e) { errorCarga = "No pudimos cargar la lista."; }
+
+const formatoPeso = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(v);
+const fechaHoy = new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase();
+---
+
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>CATÁLOGO DM DISTRIBUIDORA</title>
+
+    <style>
+        /* --- ESTILOS BASE --- */
+        body { text-transform: uppercase; }
+
+        .casilla-resaltada {
+            background-color: #fff3cd !important;
+            color: #000000 !important;
+            font-weight: bold !important;
+            border-left: 4px solid #D21F28;
+            transition: all 0.3s ease;
+        }
+
+        /* --- 📱 ESTILOS MÓVIL --- */
+        @media (max-width: 768px) {
+            .header-layout { flex-direction: row !important; align-items: center; gap: 15px; justify-content: space-between; }
+            .logo-wrapper img { height: 50px !important; }
+            .logo-text-big { font-size: 2.5rem !important; } 
+            .logo-text-small { display: none; } 
+            .header-search-container { flex: 1; max-width: none; }
+        }
+
+        /* --- 🎨 DISEÑO --- */
+        :root { --dm-red: #D21F28; --dm-dark: #1a1a1a; --kojo-blue: #0044cc; }
+        
+        .bg-industrial { background-color: var(--dm-dark); background-image: radial-gradient(#333 1px, transparent 1px); background-size: 20px 20px; }
+        header.sticky { backdrop-filter: blur(10px); background-color: rgba(26, 26, 26, 0.98); border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+        .bg-gradient-red { background: linear-gradient(90deg, #a6121a 0%, #D21F28 50%, #a6121a 100%); box-shadow: 0 4px 6px -1px rgba(210, 31, 40, 0.3); }
+        .text-brand-red { color: var(--dm-red) !important; }
+        .logo-text-big { font-size: 4rem; line-height: 0.8; text-shadow: 3px 3px 0px rgba(0,0,0,0.5); }
+        .logo-text-small { letter-spacing: 0.2em; margin-top: -5px; margin-left: 4px; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
+
+        .btn-premium { background-color: var(--dm-dark); border: 1px solid #333; color: white; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn-premium:hover { background-color: var(--dm-red); border-color: var(--dm-red); transform: translateY(-1px); box-shadow: 0 6px 12px rgba(210, 31, 40, 0.3); }
+
+        .card-detailed { border: 1px solid #e5e7eb; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card-detailed:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); border-color: var(--dm-red); }
+
+        .search-modern { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); color: white; backdrop-filter: blur(5px); text-transform: uppercase; }
+        .search-modern::placeholder { color: #aaa; font-style: italic; text-transform: uppercase; }
+        .search-modern:focus { background: white; color: black; border-color: var(--dm-red); box-shadow: 0 0 0 3px rgba(210, 31, 40, 0.2); }
+
+        /* --- 🏷️ ETIQUETAS ELEGANTES --- */
+        .badge-premium { 
+            background-color: var(--dm-dark); 
+            color: #fff; 
+            font-size: 0.65rem; 
+            padding: 2px 6px;  
+            border-radius: 4px; 
+            border: 1px solid var(--dm-red); 
+            font-weight: 700; 
+            letter-spacing: 0.5px;
+            display: inline-block;
+            text-align: center;
+            min-width: 60px;
+        }
+        
+        .badge-koyo { 
+            background-color: #f0f7ff; 
+            color: var(--kojo-blue); 
+            font-size: 0.65rem; 
+            padding: 2px 6px;  
+            border-radius: 4px; 
+            border: 1px solid var(--kojo-blue); 
+            font-weight: 700; 
+            letter-spacing: 0.5px;
+            display: inline-block;
+            text-align: center;
+            min-width: 60px;
+        }
+
+        /* --- 🖨️ ESTILOS DE IMPRESIÓN --- */
+        #printable-area { display: none; }
+        @media print {
+            @page { size: A4; margin: 0.6cm; }
+            body * { visibility: hidden; }
+            header, .bg-carbon, .bg-brand-red, footer, #btn-container, #search-input, main { display: none !important; }
+            #printable-area, #printable-area * { visibility: visible; display: block; }
+            #printable-area { position: absolute; left: 0; top: 0; width: 100%; background: white; color: black; font-family: Arial, sans-serif; font-size: 10pt; text-transform: uppercase; }
+            
+            .ForceTable { width: 100%; border-top: 1px solid #000; }
+            .GroupWrapper { display: block; width: 100%; border-left: 1px solid #000; border-right: 1px solid #000; border-bottom: 1px solid #000; margin-top: -1px; break-inside: avoid; page-break-inside: avoid; }
+            .FlexRow { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; border-top: 1px solid #000; align-items: center; width: 100%; }
+            .CategoryRow { background-color: #000 !important; color: white !important; font-weight: bold; text-align: center; padding: 6px; text-transform: uppercase; -webkit-print-color-adjust: exact; print-color-adjust: exact; break-after: avoid; page-break-after: avoid; }
+            .LeftCell { flex-grow: 1; text-align: left; padding: 3px 6px; border-right: 1px solid #000; font-size: 9pt; }
+            .RightCell { width: 140px; flex-shrink: 0; text-align: right; padding: 3px 6px; font-weight: bold; white-space: nowrap; font-size: 10pt; }
+            
+            .dual-price-print { font-size: 9pt; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+            .print-tag-prem { font-size: 7pt; margin-right: 4px; font-weight: bold; padding: 1px 3px; background: #000; color: #fff; border-radius: 2px; }
+            .print-tag-koyo { font-size: 7pt; margin-right: 4px; font-weight: bold; padding: 1px 3px; border: 1px solid #000; color: #000; border-radius: 2px; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 antialiased font-sans">
+
+    <header class="sticky top-0 z-50 bg-industrial shadow-2xl">
+        <div class="absolute bottom-0 left-0 w-full h-[3px] bg-gradient-to-r from-transparent via-red-600 to-transparent opacity-90"></div>
+        <div class="max-w-7xl mx-auto px-4 py-5 flex flex-col gap-4 relative z-10">
+            <div class="header-layout flex flex-col md:flex-row gap-8 items-center justify-between">
+                <div class="logo-wrapper flex items-center gap-5 group">
+                    <img src="/logo-dm.jpg" alt="DM Distribuidora" class="h-20 w-auto object-contain rounded-lg shadow-lg border-2 border-transparent group-hover:border-brand-red transition-all duration-300" onerror="this.style.display='none'"/>
+                    <div class="flex flex-col justify-center text-white">
+                        <h1 class="font-black logo-text-big tracking-tighter"><span class="text-brand-red">DM</span></h1>
+                        <span class="text-xl font-bold logo-text-small">DISTRIBUIDORA</span>
+                    </div>
+                </div>
+                <div class="header-search-container w-full max-w-xl">
+                    <div class="relative group">
+                        <input type="search" id="search-input" placeholder="BUSCAR..." class="search-modern relative w-full py-4 px-6 pl-14 rounded-full font-bold tracking-widest shadow-2xl transition-all duration-300 text-base"/>
+                        <span class="absolute left-5 top-4 text-gray-400 text-xl group-focus-within:text-brand-red transition-colors">🔍</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="bg-gradient-red h-10 w-full flex items-center overflow-hidden relative shadow-lg z-40">
+        <div class="absolute inset-0 w-full h-full opacity-10" style="background-image: repeating-linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), repeating-linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000); background-position: 0 0, 2px 2px; background-size: 4px 4px;"></div>
+        <div class="max-w-7xl mx-auto w-full px-4 flex justify-between text-white text-[11px] md:text-xs font-bold uppercase tracking-[0.3em] relative z-10">
+            <span class="flex items-center gap-2">⭐ PRODUCTOS DE CALIDAD</span>
+            <span class="opacity-80">CATÁLOGO 2026</span>
+        </div>
+    </div>
+
+    <main class="max-w-7xl mx-auto px-4 py-8 md:py-12 min-h-screen pb-32">
+        {errorCarga && <div class="bg-red-600 text-white p-4 font-bold text-center mb-8 shadow-lg rounded-lg border border-red-400">{errorCarga}</div>}
+
+        <div id="btn-container" class="flex flex-col md:flex-row items-center justify-between gap-6 mb-8 border-b border-gray-200 pb-6">
+            <div class="flex items-center gap-4">
+                <div class="w-2 h-12 bg-gradient-to-b from-red-600 to-black rounded-r-lg shadow-md"></div> 
+                <div>
+                    <h2 class="text-3xl md:text-5xl font-extrabold uppercase text-gray-900 tracking-tight leading-none">CATÁLOGO <span class="text-brand-red">DIGITAL</span></h2>
+                    <p class="text-sm text-gray-500 font-bold uppercase tracking-[0.2em] mt-2">SELECCIÓN PREMIUM</p>
+                </div>
+            </div>
+            <button onclick="window.print()" class="btn-premium px-8 py-4 rounded-lg font-black uppercase text-sm flex items-center gap-3 tracking-widest">
+                <span class="text-xl">🖨️</span>
+                <span>IMPRIMIR LISTA</span>
+            </button>
+        </div>
+
+        <div id="no-results" class="hidden text-center py-12">
+            <div class="text-6xl mb-4">🧐</div>
+            <h3 class="text-2xl font-bold text-gray-800">NO ENCONTRAMOS RESULTADOS</h3>
+            <p class="text-gray-500">PRUEBA BUSCANDO SOLO UNA PALABRA CLAVE.</p>
+        </div>
+
+        <div id="product-grid" class="columns-1 xl:columns-2 gap-8 space-y-8">
+            {productosAgrupados.map((item) => (
+                <article class="card-detailed break-inside-avoid bg-white rounded-xl overflow-hidden flex flex-col md:flex-row shadow-md">
+                    <div class="w-full md:w-5/12 bg-gray-50 p-6 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-gray-100 relative group">
+                        <div class="absolute inset-0 bg-white opacity-60 z-0"></div>
+                        <div class="w-full h-64 md:h-full min-h-[250px] flex items-center justify-center p-2 relative z-10">
+                            <img 
+                                id={`img-${item.id}`}
+                                src={item.imagenDefault} 
+                                alt={item.nombre} 
+                                loading="lazy"
+                                class="main-image max-w-full max-h-full object-contain transition-transform duration-500 group-hover:scale-110 drop-shadow-xl"
+                                onerror="this.src='https://placehold.co/500x500/f0f0f0/d60000?text=SIN+FOTO'"
+                            />
+                        </div>
+                        <div class="mt-4 text-center pb-4 md:pb-0 px-2 w-full relative z-10">
+                            <h3 class="font-extrabold text-xl leading-tight text-gray-900 uppercase tracking-tight texto-buscable">
+                                {item.nombre}
+                            </h3>
+                            <div class="inline-block mt-3 px-4 py-1 bg-gray-200 text-xs text-gray-700 font-bold uppercase rounded-full tracking-wide shadow-sm">
+                                {item.referencias.length} REFERENCIAS
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-full md:w-7/12 flex flex-col bg-white">
+                        <div class="bg-gray-900 text-white text-xs uppercase font-black px-6 py-4 flex justify-between items-center z-10 shadow-md tracking-widest">
+                            <span>REFERENCIA</span>
+                            <span>PRECIO UNITARIO</span>
+                        </div>
+                        <div class="flex-1 w-full">
+                            <table class="w-full text-sm text-left">
+                                <tbody class="divide-y divide-gray-100">
+                                    {item.referencias.map((ref) => (
+                                        <tr 
+                                            class="hover:bg-red-50 transition-all cursor-pointer ref-row group/row"
+                                            data-img={ref.imagenEspecifica}
+                                            data-target={`img-${item.id}`}
+                                        >
+                                            <td class="texto-buscable px-6 py-4 font-bold text-gray-800 uppercase group-hover/row:text-red-700 transition-colors w-[55%] align-middle">
+                                                <div class="break-words leading-tight">
+                                                    {ref.modelo}
+                                                </div>
+                                            </td>
+                                            
+                                            <td class="px-6 py-4 text-right w-[45%] align-middle">
+                                                {ref.esDoble ? (
+                                                    <div class="flex flex-col items-end gap-1.5">
+                                                        
+                                                        <div class="flex items-center gap-2 justify-end w-full whitespace-nowrap">
+                                                            <span class="badge-premium">PREMIUM</span>
+                                                            <span class="font-black text-lg text-gray-900 leading-none">
+                                                                {formatoPeso(ref.precio)}
+                                                            </span>
+                                                        </div>
+                                                        
+                                                        <div class="flex items-center gap-2 justify-end w-full whitespace-nowrap">
+                                                            <span class="badge-koyo">KOYO</span>
+                                                            <span class="font-bold text-base text-blue-900 leading-none">
+                                                                {formatoPeso(ref.precioKoyo)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <span class="font-black text-lg text-gray-900">
+                                                        {formatoPeso(ref.precio)}
+                                                    </span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="p-6 bg-gray-50 mt-auto border-t border-gray-100 shadow-[inset_0_4px_6px_-1px_rgba(0,0,0,0.05)]">
+                            <a href={`https://wa.me/573235213933?text=HOLA,%20ME%20INTERESA%20EL%20PRODUCTO:%20${item.nombre}`} target="_blank" class="w-full flex items-center justify-center gap-3 btn-premium py-4 rounded-lg uppercase font-black tracking-[0.15em] text-sm group shadow-lg">
+                                <span>SOLICITAR POR WHATSAPP</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                            </a>
+                        </div>
+                    </div>
+                </article>
+            ))}
+        </div>
+    </main>
+
+    <footer class="bg-industrial text-white py-16 mt-12 border-t-2 border-brand-red">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <h2 class="font-black text-4xl uppercase text-white mb-6 tracking-tighter">DM <span class="text-brand-red">DISTRIBUIDORA</span></h2>
+            <div class="flex justify-center gap-6 text-gray-400 text-sm font-bold uppercase tracking-[0.2em] mb-10">
+                <span>CALIDAD</span> • <span>CONFIANZA</span> • <span>GARANTÍA</span>
+            </div>
+            <p class="text-gray-600 text-xs tracking-wider">© 2026 CATÁLOGO OFICIAL • COLOMBIA</p>
+        </div>
+    </footer>
+    
+    <div id="printable-area">
+        <div class="print-logo-container">
+            <h1 class="print-logo-text">DM DISTRIBUIDORA</h1>
+            <p style="margin: 5px 0 0 0; font-size: 10pt;">LISTA DE PRECIOS OFICIAL - {fechaHoy}</p>
+        </div>
+        <div class="ForceTable">
+            {productosAgrupados.map(grupo => (
+                <div class="GroupWrapper">
+                    <div class="CategoryRow">
+                        {grupo.nombre}
+                    </div>
+                    {grupo.referencias.map(ref => (
+                        <div class="FlexRow">
+                            <div class="LeftCell">{ref.modelo}</div>
+                            <div class="RightCell">
+                                {ref.esDoble ? (
+                                    <div class="dual-price-print">
+                                        <div><span class="print-tag-prem">PREMIUM</span>{formatoPeso(ref.precio)}</div>
+                                        <div><span class="print-tag-koyo">KOYO</span>{formatoPeso(ref.precioKoyo)}</div>
+                                    </div>
+                                ) : (
+                                    formatoPeso(ref.precio)
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ))}
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const input = document.getElementById('search-input');
+            const cards = document.querySelectorAll('article');
+            const noResults = document.getElementById('no-results');
+            const elementosBuscables = document.querySelectorAll('.texto-buscable');
+
+            const normalize = (text) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+
+            setTimeout(() => {
+                const uniqueImages = new Set();
+                cards.forEach(card => {
+                    const img = card.querySelector('img');
+                    if(img && !img.src.includes('placehold.co')) uniqueImages.add(img.src);
+                });
+                const imageArray = Array.from(uniqueImages);
+                let imgIndex = 0;
+                const preloadNextImage = () => {
+                    if (imgIndex >= imageArray.length) return; 
+                    const img = new Image();
+                    img.src = imageArray[imgIndex];
+                    img.onload = () => { imgIndex++; preloadNextImage(); };
+                    img.onerror = () => { imgIndex++; preloadNextImage(); };
+                };
+                preloadNextImage();
+            }, 3500); 
+
+            if(input) {
+                input.addEventListener('input', (e) => {
+                    const term = normalize(e.target.value);
+                    let visibleCount = 0;
+                    cards.forEach(card => {
+                        const visibleText = normalize(card.innerText);
+                        if (visibleText.includes(term)) { card.style.display = 'flex'; visibleCount++; } else { card.style.display = 'none'; }
+                    });
+                    if(noResults) noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+                    elementosBuscables.forEach(el => {
+                        const texto = normalize(el.innerText);
+                        el.classList.toggle('casilla-resaltada', term.length > 0 && texto.includes(term));
+                    });
+                });
+            }
+
+            const refRows = document.querySelectorAll('.ref-row');
+            refRows.forEach(row => {
+                const changeImage = () => {
+                    const imgUrl = row.dataset.img;
+                    const targetId = row.dataset.target;
+                    const mainImg = document.getElementById(targetId);
+                    if (imgUrl && mainImg) mainImg.src = imgUrl;
+                };
+                row.addEventListener('click', changeImage);
+                row.addEventListener('mouseenter', changeImage);
+            });
+        });
+    </script>
+</body>
+</html>
