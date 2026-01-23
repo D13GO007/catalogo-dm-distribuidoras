@@ -23,3 +23,113 @@
 }
 
 .font-racing { font-family: 'Kanit', sans-serif; }
+/* --- 🖨️ ESTILOS DE IMPRESIÓN OPTIMIZADOS --- */
+#printable-area { display: none; }
+
+/* --- 🖨️ ESTILOS DE IMPRESIÓN (1 COLUMNA + CORTE PERFECTO) --- */
+#printable-area { display: none; }
+
+@media print {
+    @page { 
+        size: auto;   /* Usa el tamaño de papel definido por la impresora */
+        margin: 5mm;  /* Márgenes mínimos para ahorrar papel */
+    }
+
+    /* Ocultar interfaz web */
+    body * { visibility: hidden; }
+    header, main, footer, .sticky, #btn-container, #search-input { display: none !important; }
+
+    /* Mostrar área de impresión */
+    #printable-area, #printable-area * { 
+        visibility: visible; 
+    }
+
+    #printable-area { 
+        position: absolute; 
+        left: 0; 
+        top: 0; 
+        width: 100%; 
+        background: white; 
+        color: black; 
+        font-family: Arial, sans-serif; 
+        font-size: 10pt; /* Tamaño legible */
+        text-transform: uppercase;
+    }
+    
+    /* ENCABEZADO DE IMPRESIÓN */
+    .print-logo-container {
+        text-align: center;
+        margin-bottom: 10px;
+        border-bottom: 2px solid #000;
+        padding-bottom: 5px;
+    }
+    .print-logo-text { font-size: 18pt; font-weight: 900; margin: 0; }
+
+    /* CONTENEDOR PRINCIPAL */
+    .ForceTable { width: 100%; }
+
+    /* --- 🔥 AQUÍ ESTÁ LA SOLUCIÓN DEL ESPACIO BLANCO --- */
+    .GroupWrapper { 
+        display: block; 
+        width: 100%; 
+        border-left: 1px solid #000; 
+        border-right: 1px solid #000; 
+        border-bottom: 1px solid #000; 
+        margin-top: -1px; 
+        
+        /* CAMBIO CLAVE: "auto" permite cortar la tabla donde caiga */
+        break-inside: auto !important; 
+        page-break-inside: auto !important;
+    }
+
+    /* FILA INDIVIDUAL DE PRODUCTO */
+    .FlexRow { 
+        display: flex !important; 
+        flex-direction: row !important; 
+        flex-wrap: nowrap !important; 
+        border-top: 1px solid #000; 
+        align-items: center; 
+        width: 100%; 
+        
+        /* Esto protege al producto individual para que no se parta a la mitad */
+        break-inside: avoid !important; 
+        page-break-inside: avoid !important;
+    }
+
+    /* TÍTULO DE CATEGORÍA (Ej: PASTILLAS) */
+    .CategoryRow { 
+        background-color: #000 !important; 
+        color: white !important; 
+        font-weight: bold; 
+        text-align: center; 
+        padding: 6px; 
+        -webkit-print-color-adjust: exact; 
+        print-color-adjust: exact; 
+        
+        /* Intenta mantenerse pegado al primer producto */
+        break-after: avoid; 
+        page-break-after: avoid;
+    }
+
+    /* CELDAS */
+    .LeftCell { 
+        flex-grow: 1; 
+        text-align: left; 
+        padding: 4px 6px; 
+        border-right: 1px solid #000; 
+        font-size: 9pt; 
+    }
+    .RightCell { 
+        width: 140px; 
+        flex-shrink: 0; 
+        text-align: right; 
+        padding: 4px 6px; 
+        font-weight: bold; 
+        font-size: 10pt; 
+    }
+    
+    /* PRECIOS DOBLES */
+    .dual-price-print { font-size: 9pt; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+    .print-tag-prem { font-size: 7pt; margin-right: 4px; font-weight: bold; padding: 1px 3px; background: #000; color: #fff; border-radius: 2px; }
+    .print-tag-koyo { font-size: 7pt; margin-right: 4px; font-weight: bold; padding: 1px 3px; border: 1px solid #000; color: #000; border-radius: 2px; }
+}
