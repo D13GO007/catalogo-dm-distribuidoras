@@ -9,6 +9,7 @@ interface Referencia {
   precio: number;
   precioKoyo: number;
   esDoble: boolean;
+  esSoloKoyo: boolean;
   imagenEspecifica: string;
 }
 
@@ -44,12 +45,18 @@ try {
     let precio1 = 0;
     let precio2 = 0;
     let tieneDosPrecios = false;
+    let soloKoyo = false;
 
     if (precioRaw.includes('/')) {
         const partes = precioRaw.split('/');
         precio1 = Number(partes[0]);
         precio2 = Number(partes[1]);
         tieneDosPrecios = true;
+        
+        // Detectar si es solo Koyo: cuando precio1 es 0 y precio2 es mayor a 0
+        if (precio1 === 0 && precio2 > 0) {
+            soloKoyo = true;
+        }
     } else {
         precio1 = Number(precioRaw);
     }
@@ -57,7 +64,7 @@ try {
     let imagenRaw = col[3]?.replace(/^"|"$/g, '').trim() || '';
     const id = `prod-${index}`;
 
-    if (!nombreFamilia || precio1 === 0) return;
+    if (!nombreFamilia || (precio1 === 0 && precio2 === 0)) return;
 
     if (imagenRaw.startsWith('/public')) {
         imagenRaw = imagenRaw.replace('/public', '');
@@ -79,6 +86,7 @@ try {
       precio: precio1,
       precioKoyo: precio2,
       esDoble: tieneDosPrecios,
+      esSoloKoyo: soloKoyo,
       imagenEspecifica: imagenVariante
     });
   });
@@ -292,7 +300,14 @@ const fechaHoy = new Date().toLocaleDateString('es-CO', { year: 'numeric', month
                                             </td>
                                             
                                             <td class="px-6 py-4 text-right w-[45%] align-middle">
-                                                {ref.esDoble ? (
+                                                {ref.esSoloKoyo ? (
+                                                    <div class="flex items-center gap-2 justify-end w-full whitespace-nowrap">
+                                                        <span class="badge-koyo">KOYO</span>
+                                                        <span class="font-bold text-base text-blue-900 leading-none">
+                                                            {formatoPeso(ref.precioKoyo)}
+                                                        </span>
+                                                    </div>
+                                                ) : ref.esDoble ? (
                                                     <div class="flex flex-col items-end gap-1.5">
                                                         
                                                         <div class="flex items-center gap-2 justify-end w-full whitespace-nowrap">
@@ -357,7 +372,11 @@ const fechaHoy = new Date().toLocaleDateString('es-CO', { year: 'numeric', month
                         <div class="FlexRow">
                             <div class="LeftCell">{ref.modelo}</div>
                             <div class="RightCell">
-                                {ref.esDoble ? (
+                                {ref.esSoloKoyo ? (
+                                    <div>
+                                        <span class="print-tag-koyo">KOYO</span>{formatoPeso(ref.precioKoyo)}
+                                    </div>
+                                ) : ref.esDoble ? (
                                     <div class="dual-price-print">
                                         <div><span class="print-tag-prem">PREMIUM</span>{formatoPeso(ref.precio)}</div>
                                         <div><span class="print-tag-koyo">KOYO</span>{formatoPeso(ref.precioKoyo)}</div>
