@@ -1,8 +1,6 @@
 ---
 import '../styles.css';
-
-// 🔗 LINK DE DM DISTRIBUIDORAs
-const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTbPeSuPs8-Fx95XsDiOXFu7iluT-4MIlAe5uA6Y2axVzzdfyR61Wt0Giu7ja7fNWuC7bSiSZ1TkuXl/pub?output=csv';
+import { createClient } from '@supabase/supabase-js';
 
 interface Referencia {
   modelo: string;
@@ -20,64 +18,55 @@ interface ProductoAgrupado {
   referencias: Referencia[];
 }
 
+const IMAGEN_SIN_FOTO = 'https://placehold.co/500x500/f0f0f0/d60000?text=SIN+FOTO';
 let productosAgrupados: ProductoAgrupado[] = [];
 let errorCarga = '';
-const IMAGEN_SIN_FOTO = 'https://placehold.co/500x500/f0f0f0/d60000?text=SIN+FOTO';
 
 try {
-  const response = await fetch(SHEET_URL);
-  if (!response.ok) throw new Error('Error al conectar con Google Sheets');
-  const data = await response.text();
-  const filas = data.split('\n');
+  const supabase = createClient(
+    import.meta.env.SUPABASE_URL,
+    import.meta.env.SUPABASE_KEY
+  );
+
+  const { data: rows, error } = await supabase
+    .from('productos')
+    .select('id, nombre, modelo, precio, precio_premium, precio_koyo, imagen')
+    .order('nombre', { ascending: true });
+
+  if (error) throw new Error(error.message);
+
   const grupos: Record<string, ProductoAgrupado> = {};
 
-  filas.slice(1).forEach((fila, index) => {
-    if (!fila.trim()) return;
-    const col = fila.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-    if (col.length < 3) return; 
+  (rows || []).forEach((row) => {
+    const nombreFamilia = (row.nombre || '').trim().toUpperCase();
+    let modeloReferencia = (row.modelo || '').trim().toUpperCase();
+    if (!modeloReferencia) modeloReferencia = 'UNIDAD';
 
-    const nombreFamilia = col[0]?.replace(/^"|"$/g, '').trim().toUpperCase(); 
-    let modeloReferencia = col[1]?.replace(/^"|"$/g, '').trim().toUpperCase();
-    if (!modeloReferencia) modeloReferencia = "UNIDAD";
-
-    const precioRaw = col[2]?.replace(/^"|"$/g, '').replace(/[^0-9/]/g, ''); 
-    
     let precio1 = 0;
     let precio2 = 0;
     let tieneDosPrecios = false;
     let soloKoyo = false;
 
-    if (precioRaw.includes('/')) {
-        const partes = precioRaw.split('/');
-        precio1 = Number(partes[0]);
-        precio2 = Number(partes[1]);
-        tieneDosPrecios = true;
-        
-        // Detectar si es solo Koyo: cuando precio1 es 0 y precio2 es mayor a 0
-        if (precio1 === 0 && precio2 > 0) {
-            soloKoyo = true;
-        }
+    if (row.precio != null) {
+      precio1 = row.precio;
     } else {
-        precio1 = Number(precioRaw);
+      precio1 = row.precio_premium ?? 0;
+      precio2 = row.precio_koyo ?? 0;
+      if (precio2 > 0) {
+        tieneDosPrecios = true;
+        if (precio1 === 0) soloKoyo = true;
+      }
     }
-
-    let imagenRaw = col[3]?.replace(/^"|"$/g, '').trim() || '';
-    const id = `prod-${index}`;
 
     if (!nombreFamilia || (precio1 === 0 && precio2 === 0)) return;
 
-    if (imagenRaw.startsWith('/public')) {
-        imagenRaw = imagenRaw.replace('/public', '');
-    }
+    let imagenRaw = (row.imagen || '').trim();
+    if (imagenRaw.startsWith('/public')) imagenRaw = imagenRaw.replace('/public', '');
     const imagenFinal = imagenRaw !== '' ? imagenRaw : IMAGEN_SIN_FOTO;
+    const id = `prod-${row.id}`;
 
     if (!grupos[nombreFamilia]) {
-      grupos[nombreFamilia] = {
-        id,
-        nombre: nombreFamilia,
-        imagenDefault: imagenFinal,
-        referencias: []
-      };
+      grupos[nombreFamilia] = { id, nombre: nombreFamilia, imagenDefault: imagenFinal, referencias: [] };
     }
     const imagenVariante = imagenRaw !== '' ? imagenRaw : grupos[nombreFamilia].imagenDefault;
 
@@ -85,17 +74,17 @@ try {
       modelo: modeloReferencia,
       precio: precio1,
       precioKoyo: precio2,
-      esDoble: tieneDosPrecios,
+      esDoble: tieneDosPrecios && !soloKoyo,
       esSoloKoyo: soloKoyo,
-      imagenEspecifica: imagenVariante
+      imagenEspecifica: imagenVariante,
     });
   });
-  
-  productosAgrupados = Object.values(grupos).sort((a, b) => 
+
+  productosAgrupados = Object.values(grupos).sort((a, b) =>
     a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' })
   );
 
-} catch (e) { errorCarga = "No pudimos cargar la lista."; }
+} catch (e) { errorCarga = 'No pudimos cargar la lista.'; }
 
 const formatoPeso = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(v);
 const fechaHoy = new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase();
